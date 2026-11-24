@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Máquina del Tiempo · Valentina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Cinzel:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --negro:#140A0F; --bronce:#B5727C; --dorado:#F0B6B0;
+    --marfil:#FFF3F1; --sepia:#D9A3A8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;background:var(--negro);overflow:hidden;
+    font-family:"IM Fell English",serif;color:var(--marfil);user-select:none;}
+
+  #canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+  .vignette{position:fixed;inset:0;
+    background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,0.88) 100%);
+    pointer-events:none;z-index:1;}
+  .stage{position:fixed;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;}
+
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity 1.2s ease;
+    padding:2rem 2rem 6rem;}
+  .screen.active{opacity:1;pointer-events:all;}
+  .screen.zoom-exit{animation:zoomExit 1.1s ease forwards;}
+  .screen.zoom-enter{animation:zoomEnter 1.1s ease forwards;}
+  @keyframes zoomExit{0%{opacity:1;transform:scale(1);}60%{opacity:1;transform:scale(1.07);}100%{opacity:0;transform:scale(1.15);}}
+  @keyframes zoomEnter{0%{opacity:0;transform:scale(0.91);}100%{opacity:1;transform:scale(1);}}
+
+  .roman-deco{position:absolute;font-family:"Cinzel",serif;color:var(--bronce);
+    opacity:0.05;font-size:clamp(5rem,16vw,12rem);pointer-events:none;z-index:0;}
+
+  /* RELOJ */
+  .clock-wrap{position:relative;width:min(280px,66vw);height:min(280px,66vw);margin-bottom:1.8rem;flex-shrink:0;}
+  .clock-svg{width:100%;height:100%;filter:drop-shadow(0 0 18px rgba(240,182,176,0.2));transition:filter 1.8s ease;}
+  .clock-svg.glowing{filter:drop-shadow(0 0 50px rgba(240,182,176,0.75)) drop-shadow(0 0 14px rgba(240,182,176,1));}
+  .numeral{fill:var(--dorado);font-family:"Cinzel",serif;font-size:11px;}
+  .hour-hand{stroke:var(--marfil);stroke-width:3;stroke-linecap:round;}
+  .minute-hand{stroke:var(--sepia);stroke-width:2;stroke-linecap:round;}
+  .second-hand{stroke:var(--dorado);stroke-width:1;stroke-linecap:round;}
+  #hourHand,#minuteHand,#secondHand{transform-origin:160px 160px;}
+
+  /* TEXTOS S1 */
+  .label-small{font-family:"Cinzel",serif;font-size:clamp(0.55rem,1.8vw,0.72rem);
+    letter-spacing:0.35em;color:var(--bronce);text-transform:uppercase;opacity:0;margin-bottom:0.9rem;}
+  .subtitle{font-family:"IM Fell English",serif;font-style:italic;
+    font-size:clamp(0.95rem,2.8vw,1.3rem);color:var(--sepia);opacity:0;margin-bottom:1.2rem;line-height:1.6;}
+  .name-reveal{font-family:"Cinzel",serif;font-size:clamp(1.8rem,6vw,3.5rem);font-weight:500;
+    color:var(--marfil);letter-spacing:0.2em;opacity:0;
+    text-shadow:0 0 40px rgba(240,182,176,0.5),0 0 80px rgba(240,182,176,0.2);}
+  .divider{width:100px;height:1px;
+    background:linear-gradient(90deg,transparent,var(--dorado),transparent);
+    margin:1.1rem auto;opacity:0;}
+
+  /* RULETA */
+  #dateSlots{display:flex;gap:clamp(0.7rem,2.5vw,1.3rem);margin:0.4rem 0 1.2rem;opacity:0;transition:opacity 0.8s ease;}
+  .slot-box{display:flex;flex-direction:column;align-items:center;
+    border:1px solid rgba(181,114,124,0.45);background:rgba(20,8,13,0.78);
+    padding:clamp(0.45rem,1.8vw,0.75rem) clamp(0.7rem,2.5vw,1.3rem);
+    min-width:clamp(58px,15vw,88px);position:relative;overflow:hidden;backdrop-filter:blur(4px);}
+  .slot-box::before{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(0,0,0,0.65) 0%,transparent 28%,transparent 72%,rgba(0,0,0,0.65) 100%);
+    pointer-events:none;z-index:2;}
+  .slot-label{font-family:"Cinzel",serif;font-size:0.48rem;letter-spacing:0.3em;
+    color:var(--bronce);margin-bottom:0.35rem;z-index:3;}
+  .slot-value{font-family:"Cinzel",serif;font-size:clamp(1.05rem,3.3vw,1.55rem);
+    color:var(--dorado);font-weight:500;z-index:3;
+    min-height:1.8em;display:flex;align-items:center;justify-content:center;width:100%;}
+  .slot-box.locked{border-color:rgba(240,182,176,0.7);}
+  .slot-box.locked .slot-value{color:var(--marfil);text-shadow:0 0 12px rgba(240,182,176,0.6);}
+
+  #fechaEncontrada{font-family:"Cinzel",serif;font-size:clamp(0.65rem,1.9vw,0.85rem);
+    letter-spacing:0.4em;color:var(--dorado);text-transform:uppercase;opacity:0;margin-top:0.4rem;
+    text-shadow:0 0 20px rgba(240,182,176,0.8);transition:opacity 0.7s ease;}
+
+  /* S2 */
+  .floating-objects{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+  .float-item{position:absolute;opacity:0;animation:floatDrift 14s ease-in-out infinite;}
+  @keyframes floatDrift{0%{transform:translateY(0) rotate(0deg);}33%{transform:translateY(-16px) rotate(2deg);}66%{transform:translateY(-7px) rotate(-1.5deg);}100%{transform:translateY(0) rotate(0deg);}}
+  .txt-center{position:relative;z-index:2;text-align:center;max-width:520px;}
+  #yearCounter{font-family:"Cinzel",serif;font-size:clamp(3rem,12vw,7rem);
+    color:var(--dorado);opacity:0;letter-spacing:0.08em;
+    text-shadow:0 0 40px rgba(240,182,176,0.4);margin-bottom:0.4rem;line-height:1;
+    transition:none;}
+  #yearLabel{font-family:"IM Fell English",serif;font-style:italic;
+    font-size:clamp(0.9rem,2.4vw,1.15rem);color:var(--sepia);opacity:0;margin-bottom:1.4rem;
+    transition:none;}
+  .body-text-s2{font-family:"Cormorant Garamond",serif;font-style:italic;
+    font-size:clamp(0.95rem,2.6vw,1.2rem);color:var(--marfil);line-height:1.9;opacity:0;
+    max-width:450px;text-align:center;}
+  .rule{display:flex;align-items:center;justify-content:center;gap:1rem;margin:0.9rem auto;opacity:0;width:100%;max-width:280px;}
+  .rule-line{width:70px;flex:none;height:1px;background:linear-gradient(90deg,transparent,var(--bronce));}
+  .rule-line.right{background:linear-gradient(90deg,var(--bronce),transparent);}
+  .rule-diamond{width:5px;height:5px;flex:none;background:var(--dorado);transform:rotate(45deg);}
+
+  /* IMAGEN DEL CAMINO (S2, al llegar a 2026) */
+  .camino{opacity:0;margin:0.6rem auto 0;width:min(300px,62vw,32vh);aspect-ratio:800/875;
+    position:relative;}
+  .camino::before{content:"";position:absolute;inset:8% 4% 0;border-radius:50%;
+    background:radial-gradient(ellipse at center,rgba(240,182,176,0.22) 0%,transparent 70%);z-index:-1;}
+  .camino img{width:100%;height:100%;display:block;object-fit:contain;
+    /* Filtro muy leve: la imagen ya trae la paleta vintage rosa */
+    filter:sepia(0.1) saturate(0.88) brightness(0.97) drop-shadow(0 0 18px rgba(240,182,176,0.28));}
+  .camino-txt{margin-top:0.4rem;color:var(--dorado);}
+
+  /* S3 */
+  .finale-label{font-family:"Cinzel",serif;font-size:clamp(0.52rem,1.4vw,0.66rem);
+    letter-spacing:0.4em;color:var(--bronce);text-transform:uppercase;opacity:0;margin-bottom:0.45rem;}
+  .finale-big{font-family:"Cinzel",serif;font-size:clamp(1.15rem,3.6vw,2.2rem);font-weight:500;
+    color:var(--dorado);letter-spacing:0.1em;opacity:0;line-height:1.1;}
+  .finale-name{font-family:"Cinzel",serif;font-size:clamp(1.7rem,5.8vw,3.6rem);font-weight:400;
+    color:var(--marfil);letter-spacing:0.18em;opacity:0;
+    text-shadow:0 0 60px rgba(240,182,176,0.6);margin-bottom:0.7rem;}
+  .finale-wish{font-family:"IM Fell English",serif;font-style:italic;
+    font-size:clamp(0.95rem,2.4vw,1.2rem);color:var(--sepia);
+    opacity:0;max-width:460px;margin:0 auto;text-align:center;line-height:1.65;}
+  .firma{font-family:"IM Fell English",serif;font-style:italic;
+    font-size:clamp(0.88rem,2.0vw,1.08rem);color:var(--bronce);
+    opacity:0;margin-top:1.2rem;letter-spacing:0.08em;}
+  .verse{font-family:"Cormorant Garamond",serif;font-style:italic;
+    font-size:clamp(0.9rem,2.3vw,1.1rem);color:var(--marfil);opacity:0;margin-top:1rem;line-height:1.5;}
+  .verse span{display:block;font-family:"Cinzel",serif;font-style:normal;
+    font-size:clamp(0.5rem,1.3vw,0.62rem);letter-spacing:0.35em;color:var(--bronce);
+    text-transform:uppercase;margin-top:0.35rem;}
+
+  /* CONTROLES */
+  .controls{position:fixed;bottom:1.6rem;left:50%;transform:translateX(-50%);
+    z-index:10;display:flex;align-items:center;gap:1.5rem;}
+  .btn-nav{background:rgba(13,13,13,0.65);border:1px solid rgba(181,114,124,0.4);
+    color:var(--sepia);font-family:"Cinzel",serif;font-size:0.58rem;
+    letter-spacing:0.25em;text-transform:uppercase;padding:0.52rem 1.1rem;
+    cursor:pointer;transition:all 0.4s ease;backdrop-filter:blur(4px);}
+  .btn-nav:hover:not(:disabled){border-color:var(--dorado);color:var(--dorado);box-shadow:0 0 10px rgba(240,182,176,0.15);}
+  .btn-nav:disabled{opacity:0.2;cursor:not-allowed;}
+  .progress-dots{display:flex;gap:0.6rem;align-items:center;}
+  .dot{width:5px;height:5px;border-radius:50%;background:rgba(181,114,124,0.3);
+    border:1px solid rgba(181,114,124,0.4);transition:all 0.6s ease;}
+  .dot.active{background:var(--dorado);border-color:var(--dorado);box-shadow:0 0 7px rgba(240,182,176,0.6);}
+
+  /* CENTRADO: letter-spacing deja un espacio extra tras la última letra;
+     se compensa con el mismo espacio a la izquierda para que quede centrado */
+  #dateSlots{justify-content:center;}
+  .label-small{padding-left:0.35em;}
+  .name-reveal{padding-left:0.2em;}
+  .slot-label{padding-left:0.3em;}
+  #fechaEncontrada{padding-left:0.4em;}
+  #yearCounter{padding-left:0.08em;}
+  .finale-label{padding-left:0.4em;}
+  .finale-big{padding-left:0.1em;}
+  .finale-name{padding-left:0.18em;}
+  .firma{padding-left:0.08em;}
+  .verse span{padding-left:0.35em;}
+  .btn-nav{padding-left:calc(1.1rem + 0.25em);}
+
+  /* INICIO + MÚSICA */
+  #startOverlay{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at center,rgba(36,16,26,0.92) 0%,rgba(20,10,15,0.98) 70%);
+    transition:opacity 1.2s ease;}
+  #startOverlay.gone{opacity:0;pointer-events:none;}
+  #startBtn{background:none;border:0;cursor:pointer;color:var(--marfil);display:flex;flex-direction:column;
+    align-items:center;gap:0.9rem;padding:1.5rem;font:inherit;}
+  .start-ring{width:84px;height:84px;border-radius:50%;border:1px solid var(--bronce);position:relative;
+    box-shadow:0 0 24px rgba(240,182,176,0.25);animation:ringPulse 2.4s ease-in-out infinite;}
+  .start-ring::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-35%,-50%);
+    border-left:16px solid var(--dorado);border-top:10px solid transparent;border-bottom:10px solid transparent;}
+  @keyframes ringPulse{0%,100%{box-shadow:0 0 18px rgba(240,182,176,0.2);}50%{box-shadow:0 0 40px rgba(240,182,176,0.55);}}
+  .start-label{font-family:"Cinzel",serif;font-size:clamp(0.75rem,2.4vw,0.95rem);letter-spacing:0.35em;
+    padding-left:0.35em;text-transform:uppercase;color:var(--dorado);}
+  .start-sub{font-family:"IM Fell English",serif;font-style:italic;font-size:0.95rem;color:var(--sepia);}
+  #startBtn:focus-visible{outline:1px solid var(--dorado);outline-offset:6px;}
+  #muteBtn{position:fixed;top:1rem;right:1rem;z-index:12;width:40px;height:40px;border-radius:50%;
+    border:1px solid rgba(181,114,124,0.45);background:rgba(20,10,15,0.6);color:var(--sepia);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;pointer-events:none;
+    transition:opacity 1s ease,color .3s,border-color .3s;backdrop-filter:blur(4px);}
+  #muteBtn.show{opacity:1;pointer-events:auto;}
+  #muteBtn:hover{color:var(--dorado);border-color:var(--dorado);}
+  #muteBtn .ico-off{display:none;}
+  #muteBtn.off .ico-on{display:none;}
+  #muteBtn.off .ico-off{display:block;}
+
+  @media(max-width:480px){.controls{bottom:1rem;gap:0.9rem;}
+    .btn-nav{padding:0.45rem 0.85rem;font-size:0.53rem;}}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div class="vignette"></div>
+<div class="stage">
+
+  <!-- S1 -->
+  <div class="screen active" id="screen-1">
+    <div class="roman-deco" style="top:-1rem;right:0">I</div>
+    <div class="clock-wrap">
+      <svg class="clock-svg" id="clockSvg" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="160" cy="18" rx="11" ry="7" fill="none" stroke="#B5727C" stroke-width="2.5"/>
+        <line x1="160" y1="25" x2="160" y2="44" stroke="#B5727C" stroke-width="2.5"/>
+        <circle cx="160" cy="180" r="126" fill="#24101a" stroke="#B5727C" stroke-width="3"/>
+        <circle cx="160" cy="180" r="132" fill="none" stroke="#F0B6B0" stroke-width="1" opacity="0.4"/>
+        <circle cx="160" cy="180" r="118" fill="none" stroke="#B5727C" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="160" cy="180" r="108" fill="#170a10"/>
+        <circle cx="160" cy="180" r="104" fill="none" stroke="#D9A3A8" stroke-width="0.8" opacity="0.4"/>
+        <g id="ticks"></g>
+        <text x="160" y="92"  text-anchor="middle" class="numeral" font-size="13">XII</text>
+        <text x="247" y="185" text-anchor="middle" class="numeral" font-size="13">III</text>
+        <text x="160" y="278" text-anchor="middle" class="numeral" font-size="13">VI</text>
+        <text x="73"  y="185" text-anchor="middle" class="numeral" font-size="13">IX</text>
+        <line id="hourHand"   x1="160" y1="180" x2="160" y2="122" class="hour-hand"/>
+        <line id="minuteHand" x1="160" y1="180" x2="160" y2="104" class="minute-hand"/>
+        <line id="secondHand" x1="160" y1="200" x2="160" y2="100" class="second-hand"/>
+        <circle cx="160" cy="180" r="5" fill="#F0B6B0"/>
+        <circle cx="160" cy="180" r="2.5" fill="#170a10"/>
+      </svg>
+    </div>
+    <div style="text-align:center;max-width:560px">
+      <p class="label-small" id="l1a">La Máquina del Tiempo</p>
+      <p class="subtitle"    id="l1b">Buscando una fecha especial...</p>
+      <div id="dateSlots">
+        <div class="slot-box" id="slotDay">
+          <span class="slot-label">DÍA</span>
+          <span class="slot-value" id="svDay">--</span>
+        </div>
+        <div class="slot-box" id="slotMonth">
+          <span class="slot-label">MES</span>
+          <span class="slot-value" id="svMonth">--</span>
+        </div>
+        <div class="slot-box" id="slotYear">
+          <span class="slot-label">AÑO</span>
+          <span class="slot-value" id="svYear">--</span>
+        </div>
+      </div>
+      <p id="fechaEncontrada">* Fecha Encontrada *</p>
+      <div class="divider" id="l1div"></div>
+      <h1 class="name-reveal" id="l1c">Valentina</h1>
+    </div>
+  </div>
+
+  <!-- S2 -->
+  <div class="screen" id="screen-2">
+    <div class="roman-deco" style="bottom:-1rem;left:0">II</div>
+    <div class="floating-objects" id="floatingObjs"></div>
+    <div class="txt-center">
+      <div id="yearCounter">2005</div>
+      <p id="yearLabel">años de bendiciones...</p>
+      <div class="rule" id="l2r1">
+        <div class="rule-line"></div><div class="rule-diamond"></div><div class="rule-line right"></div>
+      </div>
+      <p class="body-text-s2" id="l2b">Cada año deja huellas.</p>
+      <p class="body-text-s2" id="l2c" style="margin-top:0.5rem">Y en cada uno, Dios estuvo presente.</p>
+      <div class="rule" id="l2r2" style="margin-top:0.6rem">
+        <div class="rule-line"></div><div class="rule-diamond"></div><div class="rule-line right"></div>
+      </div>
+      <div class="camino" id="l2img"><img src="valentina-camino.png" alt="Jesús camina delante de una joven, desenrollando un camino de luz"></div>    </div>
+  </div>
+
+  <!-- S3 -->
+  <div class="screen" id="screen-3">
+    <div class="roman-deco" style="top:-1rem;right:0">III</div>
+    <div class="clock-wrap" style="width:min(195px,46vw);height:min(195px,46vw);margin-bottom:1.3rem">
+      <svg class="clock-svg glowing" viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="160" cy="18" rx="11" ry="7" fill="none" stroke="#B5727C" stroke-width="2.5"/>
+        <line x1="160" y1="25" x2="160" y2="44" stroke="#B5727C" stroke-width="2.5"/>
+        <circle cx="160" cy="180" r="126" fill="#24101a" stroke="#F0B6B0" stroke-width="3"/>
+        <circle cx="160" cy="180" r="132" fill="none" stroke="#F0B6B0" stroke-width="1" opacity="0.7"/>
+        <circle cx="160" cy="180" r="118" fill="none" stroke="#F0B6B0" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="160" cy="180" r="108" fill="#170a10"/>
+        <text x="160" y="92"  text-anchor="middle" class="numeral" font-size="13">XII</text>
+        <text x="247" y="185" text-anchor="middle" class="numeral" font-size="13">III</text>
+        <text x="160" y="278" text-anchor="middle" class="numeral" font-size="13">VI</text>
+        <text x="73"  y="185" text-anchor="middle" class="numeral" font-size="13">IX</text>
+        <line x1="160" y1="180" x2="160" y2="124" class="hour-hand" style="transform:rotate(-30deg);transform-origin:160px 180px"/>
+        <line x1="160" y1="180" x2="160" y2="106" class="minute-hand" style="transform:rotate(90deg);transform-origin:160px 180px"/>
+        <line x1="160" y1="196" x2="160" y2="102" class="second-hand" style="transform:rotate(0deg);transform-origin:160px 180px"/>
+        <circle cx="160" cy="180" r="5" fill="#F0B6B0"/>
+        <circle cx="160" cy="180" r="2.5" fill="#170a10"/>
+      </svg>
+    </div>
+    <div style="text-align:center;max-width:500px">
+      <div class="divider" id="fdiv" style="width:65px;margin-bottom:0.8rem"></div>
+      <p class="finale-label" id="f1">23 · XI · 2005 &nbsp;—&nbsp; 21 años</p>
+      <p class="finale-big"  id="f2">Feliz Cumpleaños</p>
+      <h1 class="finale-name" id="f3">Valentina</h1>
+      <div class="divider" id="fdiv2" style="width:48px;margin:0 auto 0.9rem"></div>
+      <p class="finale-wish" id="f4">Que en este nuevo año Dios siga escribiendo cosas hermosas en tu historia.</p>
+      <p class="verse"       id="f6">«Deléitate asimismo en Dios, y él te concederá las peticiones de tu corazón»<span>Salmo 37:4</span></p>
+      <p class="firma"       id="f5">Con cariño, Jacob Telmo</p>
+    </div>
+  </div>
+
+</div>
+
+<audio id="music" src="valentina-musica.mp3" loop preload="auto"></audio>
+
+<div id="startOverlay">
+  <button id="startBtn" type="button">
+    <span class="start-ring"></span>
+    <span class="start-label">Toca para comenzar</span>
+    <span class="start-sub">con música</span>
+  </button>
+</div>
+
+<button id="muteBtn" type="button" aria-label="Silenciar música">
+  <svg class="ico-on" viewBox="0 0 24 24" width="16" height="16"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  <svg class="ico-off" viewBox="0 0 24 24" width="16" height="16"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+</button>
+
+<div class="controls">
+  <button class="btn-nav" id="btnPrev" onclick="changeScreen(-1)" disabled>Anterior</button>
+  <div class="progress-dots">
+    <div class="dot active" id="dot-0"></div>
+    <div class="dot" id="dot-1"></div>
+    <div class="dot" id="dot-2"></div>
+  </div>
+  <button class="btn-nav" id="btnNext" onclick="changeScreen(1)">Siguiente</button>
+</div>
+
+<script>
+// CANVAS
+const canvas=document.getElementById("canvas"),ctx=canvas.getContext("2d");
+let showCakes=false;
+function resizeCanvas(){canvas.width=innerWidth;canvas.height=innerHeight;}
+resizeCanvas();window.addEventListener("resize",resizeCanvas);
+
+let particles=[];
+function mkP(){return{x:Math.random()*canvas.width,y:Math.random()*canvas.height,
+  r:Math.random()*1.6+0.3,vx:(Math.random()-0.5)*0.28,vy:-(Math.random()*0.45+0.08),
+  life:0,maxLife:Math.random()*320+180,hue:Math.random()*25+335};}
+for(let i=0;i<55;i++){const p=mkP();p.life=Math.floor(Math.random()*p.maxLife);particles.push(p);}
+
+let cakes=[];
+function mkCake(){return{x:Math.random()*canvas.width,y:canvas.height+60,
+  vy:-(Math.random()*0.5+0.25),vx:(Math.random()-0.5)*0.3,
+  size:Math.random()*10+12,opacity:0,life:0,
+  maxLife:Math.random()*400+250,wobble:Math.random()*Math.PI*2,
+  wobbleSpeed:Math.random()*0.02+0.01};}
+
+function drawCake(c){
+  const s=c.size,x=c.x,y=c.y,a=c.opacity;
+  ctx.save();ctx.globalAlpha=a;
+  ctx.translate(x,y);ctx.rotate(Math.sin(c.wobble)*0.06);
+  ctx.fillStyle="#3a1a26";ctx.fillRect(-s*0.7,0,s*1.4,s*0.9);
+  ctx.fillStyle="#4f2434";ctx.fillRect(-s*0.65,-s*0.5,s*1.3,s*0.55);
+  ctx.fillStyle="#F0B6B0";ctx.globalAlpha=a*0.7;
+  ctx.fillRect(-s*0.65,-s*0.55,s*1.3,s*0.12);
+  ctx.globalAlpha=a;
+  [-s*0.35,0,s*0.35].forEach(function(cx2){
+    ctx.fillStyle="#B5727C";ctx.fillRect(cx2-s*0.06,-s*0.9,s*0.12,s*0.4);
+    ctx.fillStyle="#F0B6B0";ctx.beginPath();
+    ctx.ellipse(cx2,-s*0.95,s*0.08,s*0.13,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="rgba(255,214,205,0.7)";ctx.beginPath();
+    ctx.ellipse(cx2,-s*0.98,s*0.04,s*0.07,0,0,Math.PI*2);ctx.fill();
+  });
+  ctx.globalAlpha=a*0.35;ctx.strokeStyle="#F0B6B0";ctx.lineWidth=0.5;
+  ctx.strokeRect(-s*0.7,0,s*1.4,s*0.9);ctx.restore();
+}
+
+function animLoop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  particles.forEach(function(p){
+    p.life++;if(p.life>p.maxLife)Object.assign(p,mkP(),{life:0});
+    const alpha=Math.sin((p.life/p.maxLife)*Math.PI)*0.6;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle="hsla("+p.hue+",70%,70%,"+alpha+")";ctx.fill();
+    p.x+=p.vx;p.y+=p.vy;if(p.y<0)p.y=canvas.height;
+  });
+  if(showCakes){
+    if(cakes.length<14&&Math.random()<0.02)cakes.push(mkCake());
+    cakes.forEach(function(c){
+      c.life++;c.y+=c.vy;c.x+=c.vx;c.wobble+=c.wobbleSpeed;
+      if(c.life<40)c.opacity=c.life/40;
+      else if(c.life>c.maxLife-60)c.opacity=(c.maxLife-c.life)/60;
+      else c.opacity=0.55;
+      drawCake(c);
+    });
+    cakes=cakes.filter(function(c){return c.life<c.maxLife&&c.y>-80;});
+  }
+  requestAnimationFrame(animLoop);
+}
+animLoop();
+
+// RELOJ
+const hourHand=document.getElementById("hourHand");
+const minuteHand=document.getElementById("minuteHand");
+const secondHand=document.getElementById("secondHand");
+const clockSvg=document.getElementById("clockSvg");
+const ticksG=document.getElementById("ticks");
+for(let i=0;i<60;i++){
+  const angle=(i/60)*Math.PI*2-Math.PI/2,major=i%5===0;
+  const r1=major?97:101,r2=106;
+  const ln=document.createElementNS("http://www.w3.org/2000/svg","line");
+  ln.setAttribute("x1",160+r1*Math.cos(angle));ln.setAttribute("y1",180+r1*Math.sin(angle));
+  ln.setAttribute("x2",160+r2*Math.cos(angle));ln.setAttribute("y2",180+r2*Math.sin(angle));
+  ln.setAttribute("stroke",major?"#F0B6B0":"#D9A3A8");
+  ln.setAttribute("stroke-width",major?"2":"1");
+  ln.setAttribute("opacity",major?"0.9":"0.5");
+  ticksG.appendChild(ln);
+}
+let hDeg=-90,mDeg=-180,sDeg=0,clockInterval=null;
+function setHand(el,deg){el.style.transform="rotate("+deg+"deg)";}
+function startClock(){
+  clockInterval=setInterval(function(){
+    sDeg+=6;mDeg+=0.1;hDeg+=0.008;
+    setHand(secondHand,sDeg);setHand(minuteHand,mDeg);setHand(hourHand,hDeg);
+  },60);
+  clockSvg.classList.add("glowing");
+}
+function stopClock(){clearInterval(clockInterval);clockInterval=null;}
+
+// RULETA
+const DAYS=[];for(let i=1;i<=31;i++)DAYS.push(i<10?"0"+i:String(i));
+const MONTHS=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+const YEARS=[];for(let i=0;i<=21;i++)YEARS.push(String(2005+i));
+const svDay=document.getElementById("svDay");
+const svMonth=document.getElementById("svMonth");
+const svYear=document.getElementById("svYear");
+const fechaEl=document.getElementById("fechaEncontrada");
+
+function spinSlot(el,arr,targetIdx,duration,onDone){
+  let i=Math.floor(Math.random()*arr.length);
+  const startTime=Date.now();
+  let timer;
+  function tick(){
+    i=(i+1)%arr.length;el.textContent=arr[i];
+    const elapsed=Date.now()-startTime,progress=Math.min(elapsed/duration,1);
+    const interval=40+140*Math.pow(progress,2.8);
+    if(elapsed>=duration){el.textContent=arr[targetIdx];if(onDone)onDone();return;}
+    timer=setTimeout(tick,interval);
+  }
+  timer=setTimeout(tick,40);
+}
+
+function startRoulette(){
+  document.getElementById("dateSlots").style.opacity="1";
+  svDay.textContent="--";svMonth.textContent="--";svYear.textContent="--";
+  // DIA target=22 (23), MES target=10 (NOV), ANO target=0 (2005)
+  spinSlot(svDay,DAYS,22,2600,function(){
+    document.getElementById("slotDay").classList.add("locked");
+    spinSlot(svMonth,MONTHS,10,2600,function(){
+      document.getElementById("slotMonth").classList.add("locked");
+      spinSlot(svYear,YEARS,0,2800,function(){
+        document.getElementById("slotYear").classList.add("locked");
+        setTimeout(function(){
+          startClock();
+          fechaEl.style.opacity="1";
+          setTimeout(function(){goToScreen(1,false);},2000);
+        },500);
+      });
+    });
+  });
+}
+
+// CONTADOR DE ANOS S2
+// Cada frase aparece al llegar a su año mientras avanza el contador
+const YEAR_REVEALS=[[2007,"l2r1"],[2010,"l2b"],[2015,"l2c"],[2020,"l2r2"]];
+function runYearCounter(onDone){
+  const cEl=document.getElementById("yearCounter");
+  const lEl=document.getElementById("yearLabel");
+  cEl.style.opacity="1";lEl.style.opacity="1";
+  let year=2005;
+  function tick(){
+    cEl.textContent=year;
+    YEAR_REVEALS.forEach(function(r){if(r[0]===year)fadeIn(document.getElementById(r[1]),0,1.4);});
+    if(year>=2026){if(onDone)onDone();return;}
+    year++;
+    const remaining=2026-year;
+    const delay=remaining<=3?600:remaining<=8?350:remaining<=15?200:110;
+    setTimeout(tick,delay);
+  }
+  tick();
+}
+
+// OBJETOS FLOTANTES S2
+const floatDefs=[
+  {html:'<svg width="80" height="65" viewBox="0 0 80 65"><rect x="2" y="2" width="76" height="61" rx="2" fill="none" stroke="#B5727C" stroke-width="2"/><rect x="7" y="7" width="66" height="51" rx="1" fill="none" stroke="#D9A3A8" stroke-width="1" opacity="0.5"/><rect x="12" y="12" width="56" height="41" fill="#24101a" opacity="0.6"/></svg>',top:"10%",left:"5%",delay:0},
+  {html:'<svg width="55" height="55" viewBox="0 0 55 55"><circle cx="27.5" cy="27.5" r="24" fill="none" stroke="#B5727C" stroke-width="1.5"/><text x="27.5" y="9" text-anchor="middle" fill="#F0B6B0" font-size="7" font-family="Cinzel,serif">N</text><text x="27.5" y="51" text-anchor="middle" fill="#F0B6B0" font-size="7" font-family="Cinzel,serif">S</text><text x="7" y="30" text-anchor="middle" fill="#D9A3A8" font-size="7" font-family="Cinzel,serif">O</text><text x="48" y="30" text-anchor="middle" fill="#D9A3A8" font-size="7" font-family="Cinzel,serif">E</text><line x1="27.5" y1="10" x2="27.5" y2="23" stroke="#F0B6B0" stroke-width="1.5"/><line x1="27.5" y1="32" x2="27.5" y2="45" stroke="#D9A3A8" stroke-width="1.5"/><circle cx="27.5" cy="27.5" r="2.5" fill="#F0B6B0"/></svg>',top:"62%",left:"7%",delay:2},
+  {html:'<svg width="40" height="62" viewBox="0 0 40 62"><line x1="20" y1="3" x2="20" y2="59" stroke="#B5727C" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="19" x2="35" y2="19" stroke="#B5727C" stroke-width="2.5" stroke-linecap="round"/><line x1="20" y1="3" x2="20" y2="59" stroke="#F0B6B0" stroke-width="0.8" opacity="0.6"/><line x1="5" y1="19" x2="35" y2="19" stroke="#F0B6B0" stroke-width="0.8" opacity="0.6"/></svg>',top:"22%",right:"8%",delay:1},
+  {html:'<svg width="70" height="48" viewBox="0 0 70 48"><path d="M8 30 Q22 22 32 26 Q38 10 56 4 Q48 18 46 26 Q58 26 66 20 Q60 34 44 36 Q36 44 22 42 Q28 38 28 34 Q16 36 8 30 Z" fill="none" stroke="#D9A3A8" stroke-width="1.5" stroke-linejoin="round"/><circle cx="31" cy="29" r="1.3" fill="#F0B6B0"/></svg>',top:"40%",left:"12%",delay:4},
+  {html:'<svg width="72" height="92" viewBox="0 0 72 92"><ellipse cx="36" cy="46" rx="32" ry="43" fill="none" stroke="#B5727C" stroke-width="2"/><ellipse cx="36" cy="46" rx="26" ry="37" fill="none" stroke="#D9A3A8" stroke-width="1" opacity="0.4"/><ellipse cx="36" cy="46" rx="20" ry="31" fill="#24101a" opacity="0.5"/></svg>',top:"52%",right:"6%",delay:3},
+  {html:'<svg width="50" height="50" viewBox="0 0 50 50"><g transform="translate(25,25)"><circle r="9" fill="none" stroke="#B5727C" stroke-width="1.5"/><circle r="4" fill="none" stroke="#D9A3A8" stroke-width="1" opacity="0.5"/><line x1="0" y1="-9" x2="0" y2="-17" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="6.4" y1="-6.4" x2="12" y2="-12" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="9" y1="0" x2="17" y2="0" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="6.4" y1="6.4" x2="12" y2="12" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="9" x2="0" y2="17" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="-6.4" y1="6.4" x2="-12" y2="12" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="-9" y1="0" x2="-17" y2="0" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/><line x1="-6.4" y1="-6.4" x2="-12" y2="-12" stroke="#B5727C" stroke-width="3" stroke-linecap="round"/></g></svg>',top:"80%",left:"16%",delay:1.5},
+  {html:'<svg width="46" height="46" viewBox="0 0 46 46"><circle cx="23" cy="23" r="20" fill="none" stroke="#D9A3A8" stroke-width="1.5"/><circle cx="23" cy="23" r="16" fill="#170a10" opacity="0.7"/><line x1="23" y1="23" x2="23" y2="12" stroke="#F0B6B0" stroke-width="1.5" stroke-linecap="round"/><line x1="23" y1="23" x2="30" y2="23" stroke="#D9A3A8" stroke-width="1" stroke-linecap="round"/><circle cx="23" cy="23" r="2" fill="#F0B6B0"/></svg>',top:"8%",right:"16%",delay:2.5},
+  {html:'<svg width="22" height="80" viewBox="0 0 22 80"><path d="M11 4 Q18 22 11 52 Q7 66 11 78" fill="none" stroke="#B5727C" stroke-width="1.5"/><path d="M11 4 Q4 22 11 52" fill="none" stroke="#D9A3A8" stroke-width="1" opacity="0.5"/></svg>',top:"28%",left:"3%",delay:3.5},
+];
+const floatContainer=document.getElementById("floatingObjs");
+floatDefs.forEach(function(d){
+  const div=document.createElement("div");div.className="float-item";div.innerHTML=d.html;
+  if(d.top)div.style.top=d.top;if(d.left)div.style.left=d.left;if(d.right)div.style.right=d.right;
+  div.style.animationDelay=d.delay+"s";div.style.animationDuration=(12+d.delay)+"s";
+  floatContainer.appendChild(div);
+});
+
+// PANTALLAS
+let currentScreen=0,animating=false,autoTimer=null;
+const screens=[document.getElementById("screen-1"),document.getElementById("screen-2"),document.getElementById("screen-3")];
+const dots=[document.getElementById("dot-0"),document.getElementById("dot-1"),document.getElementById("dot-2")];
+const btnPrev=document.getElementById("btnPrev"),btnNext=document.getElementById("btnNext");
+
+function updateControls(){
+  btnPrev.disabled=currentScreen===0;btnNext.disabled=currentScreen===screens.length-1;
+  dots.forEach(function(d,i){d.classList.toggle("active",i===currentScreen);});
+}
+
+function changeScreen(dir){
+  if(animating)return;
+  const next=currentScreen+dir;
+  if(next<0||next>=screens.length)return;
+  clearTimeout(autoTimer);goToScreen(next,false);
+}
+
+function goToScreen(idx,useZoom){
+  if(animating)return;
+  if(idx===currentScreen&&idx!==0)return;
+  animating=true;stopClock();showCakes=false;clearTimeout(autoTimer);
+  const leaving=screens[currentScreen];currentScreen=idx;updateControls();
+  if(useZoom){
+    leaving.classList.add("zoom-exit");
+    setTimeout(function(){
+      leaving.classList.remove("zoom-exit","active");leaving.style.opacity="";
+      screens[currentScreen].classList.add("active","zoom-enter");
+      setTimeout(function(){
+        screens[currentScreen].classList.remove("zoom-enter");
+        screens[currentScreen].style.opacity="";
+        animating=false;runScreenAnimation(currentScreen);
+      },1100);
+    },1100);
+  } else {
+    leaving.classList.remove("active");
+    setTimeout(function(){
+      screens[currentScreen].classList.add("active");
+      setTimeout(function(){animating=false;},1400);
+      runScreenAnimation(currentScreen);
+    },800);
+  }
+}
+
+function fadeIn(el,delay,dur){
+  if(!el)return;dur=dur||1.2;
+  el.style.transition="opacity "+dur+"s ease "+delay+"s, transform "+dur+"s ease "+delay+"s";
+  el.style.opacity=0;el.style.transform="translateY(14px)";
+  requestAnimationFrame(function(){requestAnimationFrame(function(){el.style.opacity=1;el.style.transform="translateY(0)";});});
+}
+
+function reset1(){
+  ["l1a","l1b","l1div","l1c"].forEach(function(id){var e=document.getElementById(id);if(e){e.style.opacity=0;e.style.transform="translateY(14px)";}});
+  clockSvg.classList.remove("glowing");hDeg=-90;mDeg=-180;sDeg=0;
+  setHand(hourHand,hDeg);setHand(minuteHand,mDeg);setHand(secondHand,sDeg);
+  document.getElementById("dateSlots").style.opacity="0";
+  fechaEl.style.opacity="0";
+  svDay.textContent="--";svMonth.textContent="--";svYear.textContent="--";
+  ["slotDay","slotMonth","slotYear"].forEach(function(id){document.getElementById(id).classList.remove("locked");});
+}
+function reset2(){
+  ["yearCounter","yearLabel","l2b","l2c","l2d","l2img","l2r1","l2r2"].forEach(function(id){var e=document.getElementById(id);if(e){e.style.opacity=0;e.style.transform="translateY(14px)";}});
+  document.querySelectorAll(".float-item").forEach(function(e){e.style.opacity=0;});
+}
+function reset3(){
+  ["f1","fdiv","f2","f3","fdiv2","f4","f6","f5"].forEach(function(id){var e=document.getElementById(id);if(e){e.style.opacity=0;e.style.transform="translateY(14px)";}});
+}
+
+function runScreenAnimation(idx){
+  if(idx===0){
+    reset1();
+    fadeIn(document.getElementById("l1a"),0.3);
+    fadeIn(document.getElementById("l1b"),1.1);
+    setTimeout(startRoulette,2200);
+    // Moira aparece tras ruleta completa (~2200+2600+2600+2800+500+500)
+    setTimeout(function(){
+      fadeIn(document.getElementById("l1div"),0);
+      fadeIn(document.getElementById("l1c"),0);
+    },11400);
+  } else if(idx===1){
+    reset2();
+    document.querySelectorAll(".float-item").forEach(function(e,i){setTimeout(function(){e.style.opacity=0.16;},i*300+400);});
+    setTimeout(function(){
+      runYearCounter(function(){
+        // Al llegar a 2026 aparece la imagen del camino
+        fadeIn(document.getElementById("l2img"),0.3,2.2);
+        autoTimer=setTimeout(function(){goToScreen(2,false);},10000);
+      });
+    },600);
+  } else if(idx===2){
+    reset3();showCakes=true;
+    fadeIn(document.getElementById("f1"),0.2);
+    fadeIn(document.getElementById("fdiv"),0.6);
+    fadeIn(document.getElementById("f2"),1.2);
+    fadeIn(document.getElementById("f3"),2.2,1.6);
+    fadeIn(document.getElementById("fdiv2"),3.2);
+    fadeIn(document.getElementById("f4"),4.0);
+    fadeIn(document.getElementById("f6"),5.4,1.4);
+    fadeIn(document.getElementById("f5"),6.8,1.4);
+    // Bucle infinito: volver a pantalla 1 después de mostrar S3 completa
+    autoTimer=setTimeout(function(){
+      // Fade out S3, restart desde S1
+      screens[2].classList.remove("active");
+      showCakes=false;cakes=[];
+      setTimeout(function(){
+        currentScreen=0;updateControls();
+        screens[0].classList.add("active");
+        setTimeout(function(){animating=false;runScreenAnimation(0);},800);
+      },1000);
+    },15500);
+  }
+}
+
+updateControls();
+
+// MÚSICA: los celulares no dejan sonar audio sin un toque, por eso la
+// tarjeta arranca con "Toca para comenzar" (música + animación a la vez)
+const music=document.getElementById("music");
+const MUSIC_VOL=0.7,EDGE_FADE=1.2; // segundos de fundido al inicio/fin de cada repetición
+let musicOn=true,musicStarted=0;
+function musicLoop(){
+  if(music.duration){
+    const t=music.currentTime,d=music.duration;
+    const intro=Math.min(1,(performance.now()-musicStarted)/2500); // entrada suave inicial
+    const edge=Math.max(0,Math.min(1,t/EDGE_FADE,(d-t)/EDGE_FADE));
+    music.volume=Math.max(0,Math.min(1,MUSIC_VOL*intro*edge));
+  }
+}
+const muteBtn=document.getElementById("muteBtn");
+muteBtn.addEventListener("click",function(){
+  musicOn=!musicOn;music.muted=!musicOn;
+  muteBtn.classList.toggle("off",!musicOn);
+  muteBtn.setAttribute("aria-label",musicOn?"Silenciar música":"Activar música");
+});
+document.getElementById("startBtn").addEventListener("click",function(){
+  const ov=document.getElementById("startOverlay");
+  ov.classList.add("gone");
+  setTimeout(function(){ov.remove();},1300);
+  music.volume=0;musicStarted=performance.now();
+  try{const p=music.play();if(p&&p.catch)p.catch(function(){});}catch(e){}
+  setInterval(musicLoop,50);
+  muteBtn.classList.add("show");
+  setTimeout(function(){runScreenAnimation(0);},700);
+});
+</script>
+</body>
+</html>
